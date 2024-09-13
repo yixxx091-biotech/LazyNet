@@ -1,7 +1,0 @@
-This Supplement Information only contains the high resolution figures.
-According to the main text:
-S1 is for the results and model layout 
-S2 is for HIV population case (contains output)
-S3 is for GRN case (contains output)
-S4 is for metabolomics case
-S5 is for scRNA case (contains DEG result)
