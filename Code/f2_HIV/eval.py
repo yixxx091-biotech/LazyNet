@@ -111,3 +111,41 @@ for file_num in range(1, num_files + 1):
         os.makedirs(output_folder)
     fig.savefig(f'{output_folder}/model_predictions_{file_num}.png')
     plt.close()
+
+# --- Compute Normalized RMSD ---
+# Here, we use MinMax scaling to bring the values to [0,1] before computing RMSE
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+
+# Flatten the selected data for scaling
+all_labels_flat = all_labels.flatten()
+all_predictions_flat = all_predictions.flatten()
+
+labels_scaled = scaler.fit_transform(all_labels_flat.reshape(-1, 1)).flatten()
+predictions_scaled = scaler.transform(all_predictions_flat.reshape(-1, 1)).flatten()
+
+all_norm_rmsd = np.sqrt(np.mean((predictions_scaled - labels_scaled) ** 2))
+print("Normalized RMSD for selected molecules:", all_norm_rmsd)
+
+
+# --- Compute AUC ---
+from sklearn.metrics import roc_curve, auc
+
+# Define a threshold to binarize the continuous outputs (adjust as needed)
+threshold = 0.5
+binary_labels_selected = (all_labels > threshold).astype(int)
+binary_predictions_selected = (all_predictions > threshold).astype(int)
+
+# Compute ROC curve and AUC by flattening the arrays
+fpr_sel, tpr_sel, _ = roc_curve(binary_labels_selected.ravel(), binary_predictions_selected.ravel())
+all_auc = auc(fpr_sel, tpr_sel)
+print("AUC for selected molecules:", all_auc)
+
+
+# (Optional) Print total number of trainable parameters (this is model-wide)
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print("Total number of trainable parameters:", total_params)
+
+from scipy.stats import pearsonr
+corr, _ = pearsonr(all_labels.flatten(), all_predictions.flatten())
+print("Pearson Correlation:", corr)

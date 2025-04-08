@@ -91,39 +91,53 @@ all_labels = torch.cat(all_labels).cpu().numpy()
 all_predictions = torch.cat(all_predictions).cpu().numpy()
 
 num_genes = all_predictions.shape[1]
-num_genes_to_plot = num_genes
+num_genes_to_plot = num_genes  # Assuming this is 80
 num_time_points = all_predictions.shape[0]
 time = np.arange(1, num_time_points + 1)
 df = pd.read_csv('./metabolomics.csv')
 df = df[df.index.notnull() & (df.index != '')]
 df = df.loc[~(df == 0).all(axis=1)]
 column_names = df.columns
-fig, axes = plt.subplots(nrows=10, ncols=8, figsize=(40, 30))
-axes = axes.flatten()
-for i in range(num_genes_to_plot):
-    ax = axes[i]
-    ax.plot(time, all_labels[:, i], label='True Answer', color='blue')
-    ax.plot(time, all_predictions[:, i], '--', label='Prediction', color='red', linewidth=2)
-    ax.set_title(f'{column_names[i]}', fontsize=10)
-    ax.set_xlabel('Time Points', fontsize=5)
-    ax.set_ylabel('Values', fontsize=5)
-    ax.tick_params(axis='both', which='major', labelsize=5)
+
+molecules_to_plot = [1, 2, 3, 6, 20, 21, 22, 23, 24, 25, 27, 28, 30, 34,
+                     35, 38, 44, 45, 46, 47, 48, 49, 51, 52, 53, 56, 57, 59,
+                     60, 62, 68, 69, 77]  # Indices of molecules to plot
+
+num_selected = len(molecules_to_plot)
+fig, axes = plt.subplots(nrows=7, ncols=5, figsize=(80, 40))  # Increase figure size for clarity
+axes = axes.flatten()  # Flatten the 2D array to a 1D array
+
+for idx, molecule_idx in enumerate(molecules_to_plot):
+    ax = axes[idx]
+    ax.plot(time, all_labels[:, molecule_idx], label='True Answer', color='blue')
+    ax.plot(time, all_predictions[:, molecule_idx], '--', label='Prediction', color='red', linewidth=2)
+    ax.set_title(f'{column_names[molecule_idx]}', fontsize=10)
+    ax.set_xlabel('Time Points', fontsize=8)
+    ax.set_ylabel('Values', fontsize=8)
+    ax.tick_params(axis='both', which='major', labelsize=8)
     ax.tick_params(axis='x', labelrotation=45)
 
+# Turn off any unused subplots (if there are any left over)
+for j in range(idx + 1, len(axes)):
+    axes[j].axis('off')
+
+# Add a legend to the first subplot
 axes[0].legend()
 plt.tight_layout(pad=1)
 plt.show()
 
-scaler = StandardScaler()
-labels_scaled = scaler.fit_transform(all_labels)
-predictions_scaled = scaler.fit_transform(all_predictions)
-rmse_per_gene = np.sqrt(np.mean((predictions_scaled - labels_scaled)**2, axis=0))
+
+# For the RMSE bar plot, restrict to the selected molecules
+# 'rmse_per_gene' should have been computed previously (see your code)
+selected_rmse = rmse_per_gene[molecules_to_plot]
+selected_names = [column_names[i] for i in molecules_to_plot]
+
 plt.figure(figsize=(10, 6))
-plt.bar(column_names, rmse_per_gene, color='green')
+plt.bar(selected_names, selected_rmse, color='green')
 plt.xlabel('Molecules')
 plt.ylabel('RMSE')
-plt.title('Root Mean Square Error for Each Molecule Across All Time Points')
-plt.xticks(rotation=90)
+plt.title('Root Mean Square Error for Selected Molecules')
+plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
@@ -134,3 +148,44 @@ labels_scaled = scaler.fit_transform(all_labels.reshape(-1, 1)).flatten()
 predictions_scaled = scaler.transform(all_predictions.reshape(-1, 1)).flatten()
 rmse = np.sqrt(np.mean((predictions_scaled - labels_scaled) ** 2))
 print("Overall RMSE:", rmse)
+
+selected_all_labels = all_labels[:, molecules_to_plot]
+selected_all_predictions = all_predictions[:, molecules_to_plot]
+
+# --- Compute Normalized RMSD ---
+# Here, we use MinMax scaling to bring the values to [0,1] before computing RMSE
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+
+# Flatten the selected data for scaling
+selected_labels_flat = selected_all_labels.flatten()
+selected_predictions_flat = selected_all_predictions.flatten()
+
+labels_scaled = scaler.fit_transform(selected_labels_flat.reshape(-1, 1)).flatten()
+predictions_scaled = scaler.transform(selected_predictions_flat.reshape(-1, 1)).flatten()
+
+selected_norm_rmsd = np.sqrt(np.mean((predictions_scaled - labels_scaled) ** 2))
+print("Normalized RMSD for selected molecules:", selected_norm_rmsd)
+
+
+# --- Compute AUC ---
+from sklearn.metrics import roc_curve, auc
+
+# Define a threshold to binarize the continuous outputs (adjust as needed)
+threshold = 0.5
+binary_labels_selected = (selected_all_labels > threshold).astype(int)
+binary_predictions_selected = (selected_all_predictions > threshold).astype(int)
+
+# Compute ROC curve and AUC by flattening the arrays
+fpr_sel, tpr_sel, _ = roc_curve(binary_labels_selected.ravel(), binary_predictions_selected.ravel())
+selected_auc = auc(fpr_sel, tpr_sel)
+print("AUC for selected molecules:", selected_auc)
+
+
+# (Optional) Print total number of trainable parameters (this is model-wide)
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print("Total number of trainable parameters:", total_params)
+
+from scipy.stats import pearsonr
+corr, _ = pearsonr(selected_all_labels.flatten(), selected_all_predictions.flatten())
+print("Pearson Correlation:", corr)

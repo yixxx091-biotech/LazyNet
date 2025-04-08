@@ -86,3 +86,6 @@ final_matrix = cache_matrix[indices, :]
 print(final_matrix.shape)
 df = pd.DataFrame(final_matrix.transpose())
 df.to_csv('./080324pub_bigc_trainset140_053024_quad_pred_700dp.csv', header=False, index_label=False)
+
+total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print("Total number of trainable parameters:", total_params)
